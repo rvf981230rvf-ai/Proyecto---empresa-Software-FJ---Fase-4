@@ -30,3 +30,16 @@ class Servicio(ABC):
     @abstractmethod
     def calcular_costo(self):
         pass
+class Cliente:
+
+    def __init__(self, nombre, correo):
+
+        if "@" not in correo:
+            raise ClienteError("Correo inválido")
+
+        self.nombre = nombre
+        self.correo = correo
+
+    def mostrar(self):
+        print(self.nombre, "-", self.correo)
+
