@@ -1,0 +1,32 @@
+# -------------------------------
+# Proyecto para la empresa Software FJ
+# -------------------------------
+
+
+from abc import ABC, abstractmethod
+import logging
+
+# LOGS
+logging.basicConfig(
+    filename="sistema.log",
+    level=logging.INFO
+)
+
+# EXCEPCIONES
+class ClienteError(Exception):
+    pass
+
+class ReservaError(Exception):
+    pass
+
+
+# CLASE ABSTRACTA
+class Servicio(ABC):
+
+    def __init__(self, nombre, precio):
+        self.nombre = nombre
+        self.precio = precio
+
+    @abstractmethod
+    def calcular_costo(self):
+        pass
