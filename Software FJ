@@ -90,3 +90,57 @@ class Reserva:
     def cancelar(self):
         self.estado = "Cancelada"
 
+clients = []
+services = []
+reservations = []
+
+try:
+
+    c1 = Client("John", "john@gmail.com")
+    clients.append(c1)
+
+    c2 = Client("Anna", "anna@gmail.com")
+    clients.append(c2)
+
+    s1 = RoomReservation(100, 2)
+    s2 = EquipmentRental(50, 3)
+    s3 = Consulting(150, 2)
+
+    services.append(s1)
+    services.append(s2)
+    services.append(s3)
+
+    r1 = Reservation(c1, s1)
+    r1.confirm()
+
+    reservations.append(r1)
+
+    print("Room cost:", s1.calculate_cost())
+    print("Equipment cost:", s2.calculate_cost(0.19))
+    print("Consulting cost:", s3.calculate_cost())
+
+    logging.info("Operations completed successfully")
+
+except Exception as e:
+
+    logging.error(str(e))
+    print("Error:", e)
+
+try:
+    invalid_client = Client("Peter", "invalid_email")
+except Exception as e:
+    print("Error:", e)
+    logging.error(str(e))
+
+try:
+    invalid_reservation = Reservation(None, None)
+except Exception as e:
+    print("Error:", e)
+    logging.error(str(e))
+
+print("\nRegistered Reservations:")
+for r in reservations:
+    print(r.client.name, "-", r.service.name, "-", r.status)
+
+
+
