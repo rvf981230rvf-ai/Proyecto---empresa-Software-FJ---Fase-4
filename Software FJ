@@ -43,3 +43,50 @@ class Cliente:
     def mostrar(self):
         print(self.nombre, "-", self.correo)
 
+class ReservaSala(Servicio):
+
+    def __init__(self, precio, horas):
+        super().__init__("Reserva Sala", precio)
+        self.horas = horas
+
+    def calcular_costo(self, impuesto=0):
+        return (self.precio * self.horas) * (1 + impuesto)
+
+
+class AlquilerEquipo(Servicio):
+
+    def __init__(self, precio, dias):
+        super().__init__("Alquiler Equipo", precio)
+        self.dias = dias
+
+    def calcular_costo(self, impuesto=0):
+        return (self.precio * self.dias) * (1 + impuesto)
+
+
+class Asesoria(Servicio):
+
+    def __init__(self, precio, horas):
+        super().__init__("Asesoría", precio)
+        self.horas = horas
+
+    def calcular_costo(self, impuesto=0):
+        return (self.precio * self.horas) * (1 + impuesto)
+
+
+class Reserva:
+
+    def __init__(self, cliente, servicio):
+
+        if cliente is None or servicio is None:
+            raise ReservaError("Datos incompletos")
+
+        self.cliente = cliente
+        self.servicio = servicio
+        self.estado = "Pendiente"
+
+    def confirmar(self):
+        self.estado = "Confirmada"
+
+    def cancelar(self):
+        self.estado = "Cancelada"
+
