@@ -2,145 +2,428 @@
 # Proyecto para la empresa Software FJ
 # -------------------------------
 
-
 from abc import ABC, abstractmethod
 import logging
+import math
 
-# LOGS
+
+# Log events and errors to a file.
 logging.basicConfig(
-    filename="sistema.log",
-    level=logging.INFO
+    filename="software_fj.log",
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(message)s",
 )
-
-# EXCEPCIONES
-class ClienteError(Exception):
-    pass
-
-class ReservaError(Exception):
-    pass
+logger = logging.getLogger("SoftwareFJ")
 
 
-# CLASE ABSTRACTA
-class Servicio(ABC):
+# Custom exceptions.
+class ApplicationError(Exception):
+    """Base exception for the application."""
 
-    def __init__(self, nombre, precio):
-        self.nombre = nombre
-        self.precio = precio
+
+class ValidationError(ApplicationError):
+    """Raised when input data is invalid."""
+
+
+class ClientError(ValidationError):
+    """Raised for client-related errors."""
+
+
+class ServiceError(ValidationError):
+    """Raised for service-related errors."""
+
+
+class ReservationError(ApplicationError):
+    """Raised for reservation-related errors."""
+
+
+# General abstract entity.
+class Entity(ABC):
+    _next_id = 1
+
+    def __init__(self):
+        self._entity_id = Entity._next_id
+        Entity._next_id += 1
+
+    @property
+    def entity_id(self):
+        return self._entity_id
 
     @abstractmethod
-    def calcular_costo(self):
-        pass
-class Cliente:
-
-    def __init__(self, nombre, correo):
-
-        if "@" not in correo:
-            raise ClienteError("Correo inválido")
-
-        self.nombre = nombre
-        self.correo = correo
-
-    def mostrar(self):
-        print(self.nombre, "-", self.correo)
-
-class ReservaSala(Servicio):
-
-    def __init__(self, precio, horas):
-        super().__init__("Reserva Sala", precio)
-        self.horas = horas
-
-    def calcular_costo(self, impuesto=0):
-        return (self.precio * self.horas) * (1 + impuesto)
+    def describe(self):
+        """Return a description of the entity."""
 
 
-class AlquilerEquipo(Servicio):
+# Client with encapsulated personal data.
+class Client(Entity):
+    def __init__(self, name, email):
+        super().__init__()
 
-    def __init__(self, precio, dias):
-        super().__init__("Alquiler Equipo", precio)
-        self.dias = dias
+        if not isinstance(name, str) or not name.strip():
+            raise ClientError("Client name must be a non-empty string.")
 
-    def calcular_costo(self, impuesto=0):
-        return (self.precio * self.dias) * (1 + impuesto)
+        if not isinstance(email, str) or "@" not in email or "." not in email:
+            raise ClientError("Client email address is invalid.")
+
+        self.__name = name.strip()
+        self.__email = email.strip()
+
+    @property
+    def name(self):
+        return self.__name
+
+    @property
+    def email(self):
+        return self.__email
+
+    def describe(self):
+        return f"Client {self.name} ({self.email})"
 
 
-class Asesoria(Servicio):
+# Abstract service class.
+class Service(Entity, ABC):
+    def __init__(self, name, price, available=True):
+        super().__init__()
 
-    def __init__(self, precio, horas):
-        super().__init__("Asesoría", precio)
-        self.horas = horas
+        if not isinstance(name, str) or not name.strip():
+            raise ServiceError("Service name must be a non-empty string.")
 
-    def calcular_costo(self, impuesto=0):
-        return (self.precio * self.horas) * (1 + impuesto)
+        if (
+            not isinstance(price, (int, float))
+            or isinstance(price, bool)
+            or not math.isfinite(price)
+            or price <= 0
+        ):
+            raise ServiceError("Service price must be a positive number.")
+
+        self.name = name.strip()
+        self.price = float(price)
+        self.available = available
+
+    @property
+    def available(self):
+        return self._available
+
+    @available.setter
+    def available(self, value):
+        if not isinstance(value, bool):
+            raise ServiceError("Service availability must be True or False.")
+        self._available = value
+
+    def _validate_common(self, duration, unit):
+        if not self.available:
+            raise ServiceError(f"{self.name} is currently unavailable.")
+
+        if (
+            not isinstance(duration, (int, float))
+            or isinstance(duration, bool)
+            or not math.isfinite(duration)
+            or duration <= 0
+        ):
+            raise ServiceError(f"{unit.capitalize()} must be a positive number.")
+
+    def _calculate_total(self, duration, tax_rate, discount):
+        for value, label in (
+            (tax_rate, "Tax rate"),
+            (discount, "Discount"),
+        ):
+            if (
+                not isinstance(value, (int, float))
+                or isinstance(value, bool)
+                or not math.isfinite(value)
+                or value < 0
+                or value > 1
+            ):
+                raise ServiceError(f"{label} must be between 0 and 1.")
+
+        subtotal = self.price * duration
+        return subtotal * (1 + tax_rate) * (1 - discount)
+
+    @abstractmethod
+    def validate_parameters(self, duration):
+        """Validate service-specific parameters."""
+
+    @abstractmethod
+    def calculate_cost(self, duration, tax_rate=0, discount=0):
+        """Calculate the cost for this service."""
+
+    @abstractmethod
+    def describe(self):
+        """Describe this service."""
 
 
-class Reserva:
+# Specialized service 1.
+class RoomReservation(Service):
+    def __init__(self, price_per_hour, available=True):
+        super().__init__("Room reservation", price_per_hour, available)
 
-    def __init__(self, cliente, servicio):
+    def validate_parameters(self, duration):
+        self._validate_common(duration, "hours")
 
-        if cliente is None or servicio is None:
-            raise ReservaError("Datos incompletos")
+    def calculate_cost(self, duration, tax_rate=0, discount=0):
+        self.validate_parameters(duration)
+        return self._calculate_total(duration, tax_rate, discount)
 
-        self.cliente = cliente
-        self.servicio = servicio
-        self.estado = "Pendiente"
+    def describe(self):
+        return f"{self.name}: ${self.price:.2f} per hour"
 
-    def confirmar(self):
-        self.estado = "Confirmada"
 
-    def cancelar(self):
-        self.estado = "Cancelada"
+# Specialized service 2.
+class EquipmentRental(Service):
+    def __init__(self, price_per_day, available=True):
+        super().__init__("Equipment rental", price_per_day, available)
 
+    def validate_parameters(self, duration):
+        self._validate_common(duration, "days")
+
+    def calculate_cost(self, duration, tax_rate=0, discount=0):
+        self.validate_parameters(duration)
+        return self._calculate_total(duration, tax_rate, discount)
+
+    def describe(self):
+        return f"{self.name}: ${self.price:.2f} per day"
+
+
+# Specialized service 3.
+class SpecializedConsulting(Service):
+    def __init__(self, price_per_hour, available=True):
+        super().__init__("Specialized consulting", price_per_hour, available)
+
+    def validate_parameters(self, duration):
+        self._validate_common(duration, "hours")
+
+    def calculate_cost(self, duration, tax_rate=0, discount=0):
+        self.validate_parameters(duration)
+        return self._calculate_total(duration, tax_rate, discount)
+
+    def describe(self):
+        return f"{self.name}: ${self.price:.2f} per hour"
+
+
+# Reservation connects a client, a service, duration, and status.
+class Reservation(Entity):
+    def __init__(self, client, service, duration):
+        super().__init__()
+
+        if not isinstance(client, Client):
+            raise ReservationError("A valid client is required.")
+
+        if not isinstance(service, Service):
+            raise ReservationError("A valid service is required.")
+
+        try:
+            service.validate_parameters(duration)
+        except ServiceError as error:
+            raise ReservationError(
+                "Reservation could not be created because its service parameters are invalid."
+            ) from error
+
+        self.client = client
+        self.service = service
+        self.duration = duration
+        self._status = "Pending"
+        self.total_cost = None
+
+    @property
+    def status(self):
+        return self._status
+
+    def confirm(self):
+        if self._status != "Pending":
+            raise ReservationError(
+                f"Only pending reservations can be confirmed. Current status: {self._status}."
+            )
+
+        self._status = "Confirmed"
+        logger.info("Reservation %s was confirmed.", self.entity_id)
+
+    def cancel(self):
+        if self._status not in ("Pending", "Confirmed"):
+            raise ReservationError(
+                f"Reservation cannot be cancelled from status {self._status}."
+            )
+
+        self._status = "Cancelled"
+        logger.info("Reservation %s was cancelled.", self.entity_id)
+
+    def process(self, tax_rate=0, discount=0):
+        if self._status != "Confirmed":
+            raise ReservationError("Only confirmed reservations can be processed.")
+
+        try:
+            self.total_cost = self.service.calculate_cost(
+                self.duration, tax_rate, discount
+            )
+        except ServiceError as error:
+            # Exception chaining preserves the original cause.
+            raise ReservationError(
+                "Reservation processing failed because the service could not calculate its cost."
+            ) from error
+
+        self._status = "Processed"
+        logger.info(
+            "Reservation %s was processed. Total: $%.2f",
+            self.entity_id,
+            self.total_cost,
+        )
+        return self.total_cost
+
+    def describe(self):
+        return (
+            f"Reservation {self.entity_id}: {self.client.name}, "
+            f"{self.service.name}, {self.duration}, {self._status}"
+        )
+
+
+# In-memory collections. No database is used.
 clients = []
 services = []
 reservations = []
 
-try:
 
-    c1 = Client("John", "john@gmail.com")
-    clients.append(c1)
+# Runs each scenario independently so one error does not stop the program.
+operation_number = 0
 
-    c2 = Client("Anna", "anna@gmail.com")
-    clients.append(c2)
 
-    s1 = RoomReservation(100, 2)
-    s2 = EquipmentRental(50, 3)
-    s3 = Consulting(150, 2)
+def run_operation(label, action):
+    global operation_number
+    operation_number += 1
 
-    services.append(s1)
-    services.append(s2)
-    services.append(s3)
+    print(f"\nOperation {operation_number}: {label}")
 
-    r1 = Reservation(c1, s1)
-    r1.confirm()
+    try:
+        result = action()
+    except ApplicationError as error:
+        logger.exception("Operation failed: %s", label)
+        print(f"Handled error: {error}")
+        return None
+    except Exception as error:
+        # Catch unexpected errors too, keeping the demonstration running.
+        logger.exception("Unexpected error during: %s", label)
+        print(f"Unexpected error handled: {error}")
+        return None
+    else:
+        logger.info("Operation completed: %s", label)
+        print("Completed successfully.")
+        return result
+    finally:
+        print("Operation finished.")
 
-    reservations.append(r1)
 
-    print("Room cost:", s1.calculate_cost())
-    print("Equipment cost:", s2.calculate_cost(0.19))
-    print("Consulting cost:", s3.calculate_cost())
+# 1. Register a valid client.
+client_1 = run_operation(
+    "Register a valid client",
+    lambda: clients.append(Client("Jordan Lee", "jordan@example.com")),
+)
+client_1 = clients[-1] if clients else None
 
-    logging.info("Operations completed successfully")
+# 2. Try to register a client with an invalid email.
+run_operation(
+    "Reject a client with an invalid email",
+    lambda: Client("Morgan Smith", "invalid-email"),
+)
 
-except Exception as e:
+# 3. Register another valid client.
+run_operation(
+    "Register a second valid client",
+    lambda: clients.append(Client("Taylor Kim", "taylor@example.com")),
+)
+client_2 = clients[-1]
 
-    logging.error(str(e))
-    print("Error:", e)
+# 4-6. Create the three valid service types.
+run_operation(
+    "Create a room reservation service",
+    lambda: services.append(RoomReservation(100)),
+)
+run_operation(
+    "Create an equipment rental service",
+    lambda: services.append(EquipmentRental(50)),
+)
+run_operation(
+    "Create a consulting service",
+    lambda: services.append(SpecializedConsulting(150)),
+)
 
-try:
-    invalid_client = Client("Peter", "invalid_email")
-except Exception as e:
-    print("Error:", e)
-    logging.error(str(e))
+room_service = services[0]
+equipment_service = services[1]
+consulting_service = services[2]
 
-try:
-    invalid_reservation = Reservation(None, None)
-except Exception as e:
-    print("Error:", e)
-    logging.error(str(e))
+# 7. Try to create a service with an invalid price.
+run_operation(
+    "Reject a service with a negative price",
+    lambda: RoomReservation(-20),
+)
 
-print("\nRegistered Reservations:")
-for r in reservations:
-    print(r.client.name, "-", r.service.name, "-", r.status)
+# 8. Create a valid reservation.
+def create_reservation():
+    reservation = Reservation(client_1, room_service, 2)
+    reservations.append(reservation)
+    return reservation
 
+
+reservation_1 = run_operation("Create a valid room reservation", create_reservation)
+
+# 9. Confirm the reservation.
+run_operation("Confirm the room reservation", reservation_1.confirm)
+
+# 10. Process it with tax and discount.
+run_operation(
+    "Process reservation with tax and discount",
+    lambda: print(f"Total cost: ${reservation_1.process(0.19, 0.10):.2f}"),
+)
+
+# 11. Try to cancel an already processed reservation.
+run_operation(
+    "Reject cancellation of a processed reservation",
+    reservation_1.cancel,
+)
+
+# 12. Try to create a reservation with a missing client.
+run_operation(
+    "Reject a reservation with a missing client",
+    lambda: Reservation(None, room_service, 1),
+)
+
+# 13. Create a second valid reservation.
+def create_second_reservation():
+    reservation = Reservation(client_2, equipment_service, 3)
+    reservations.append(reservation)
+    return reservation
+
+
+reservation_2 = run_operation(
+    "Create a valid equipment reservation",
+    create_second_reservation,
+)
+
+# 14. Confirm the second reservation.
+run_operation("Confirm the equipment reservation", reservation_2.confirm)
+
+# 15. Simulate the service becoming unavailable before processing.
+def process_unavailable_service():
+    equipment_service.available = False
+    return reservation_2.process()
+
+
+run_operation(
+    "Handle a service that becomes unavailable before processing",
+    process_unavailable_service,
+)
+
+# Display the final in-memory records.
+print("\nRegistered clients:")
+for client in clients:
+    print("-", client.describe())
+
+print("\nAvailable service records:")
+for service in services:
+    print("-", service.describe())
+
+print("\nReservations:")
+for reservation in reservations:
+    print("-", reservation.describe())
+
+print("\nThe program completed all operation scenarios.")
+print("Errors and events were written to software_fj.log.")
 
 
